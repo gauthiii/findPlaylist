@@ -54,7 +54,7 @@ class SongDetailPage extends StatelessWidget {
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                       fontSize: 30,
-                                      fontFamily: "Poppins",
+                                      fontFamily: "Pass",
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white)))))
                 ])),
@@ -117,6 +117,7 @@ class SongDetailPage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
+            // Text(song[20]),
             Center(
               child: IconButton(
                 icon: Image.asset(
@@ -208,7 +209,10 @@ class SongDetailPage extends StatelessWidget {
   }
 
   Future<void> _launchURL(String url) async {
-    if (!await launch(url)) {
+
+    Uri uri = Uri.parse(song[20].toString());
+
+    if (!await launchUrl(uri)) {
       throw 'Could not launch $url';
     }
   }

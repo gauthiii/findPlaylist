@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:findplaylist/SongDetailPage.dart';
+import 'package:findplaylist/SongsTableScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
@@ -49,12 +50,14 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
   List<List<dynamic>> songs = [];
+  List<List<dynamic>> database = [];
   List<List<dynamic>> filteredSongs = [];
   bool isLoading = false;
   String searchQuery = '';
   String searchType = 'Track Name'; // Default search type
   List<String> searchOptions = ['Track Name', 'Artist Name', 'Album Name'];
   List artistList = [];
+  Map<String, AlbumInfo> albums = {};
 
   @override
   void initState() {
@@ -62,8 +65,81 @@ class _MyHomePageState extends State<MyHomePage> {
     loadAsset();
   }
 
+  // Define a function to load and parse the CSV data
+Future<List<List<dynamic>>> loadCsvData(String csvPath) async {
+  // Load CSV data from the given path
+  String csvString = await rootBundle.loadString(csvPath);
+
+  // Parse the CSV string into a list of lists
+  List<List<dynamic>> csvTable = CsvToListConverter().convert(csvString);
+
+  return csvTable;
+}
+
   Future<void> loadAsset() async {
     setState(() => isLoading = true);
+   List<List<dynamic>> csvTable = await loadCsvData("assets/tamil_tracks.csv");
+   
+     List<dynamic> ls=[];
+     int j=0;
+     
+    for(var i=0;i<csvTable[0].length;i++){
+         if(j<21){
+          if(j==20){
+            ls.add(csvTable[0][i].split("\n")[0]);
+          }
+          else
+          ls.add(csvTable[0][i]);
+          j=j+1;
+          
+         }
+         if(j==21){
+          ls.add(csvTable[0][i].split("\n")[0]);
+          songs.add(ls);
+          ls=[csvTable[0][i].split("\n")[1]];
+          j=1;
+          
+         }
+    }
+    print(songs.length);
+
+    
+
+
+    songs = songs.sublist(1);
+
+    database=songs.sublist(0,10);
+
+    Set uniqueArtists = Set(); // Set to store unique artist names
+
+    songs.forEach((song) {
+      song[1] = song[1].toString();
+      song[2] = song[2].toString();
+      song[6] = song[6].toString();
+
+      List artists = song[2].split(',').map((s) => s.trim()).toList();
+      uniqueArtists.addAll(artists); // Add to the set of unique artists
+    });
+
+    artistList = uniqueArtists.toList();
+
+     songs.forEach((song) {
+    String albumName = song[6];
+    if (albums.containsKey(albumName)) {
+      albums[albumName]?.songCount += 1;
+    } else {
+      albums[albumName] = AlbumInfo(albumName, song[5], 1);
+    }
+  });
+
+    filteredSongs = []; // Initially display all songs
+    songs.shuffle(Random());
+    
+    setState(() => isLoading = false);
+  }
+
+  process() async{
+
     final data = await rootBundle.loadString('assets/tamil_tracks.csv');
     songs = const CsvToListConverter().convert(data);
     // ignore: avoid_print
@@ -94,7 +170,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     filteredSongs = []; // Initially display all songs
     songs.shuffle(Random());
-    setState(() => isLoading = false);
+
   }
 
   void updateSearchQuery(String query) {
@@ -221,10 +297,17 @@ class _MyHomePageState extends State<MyHomePage> {
         const SizedBox(
           height: 20,
         ),
-        Image.asset(
+       GestureDetector(
+        onTap: (){
+          Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => SongsTableScreen(songs: database)),
+    );
+        },
+        child: Image.asset(
           'assets/social.png',
           height: 50,
-        ),
+        )),
         const SizedBox(
           height: 20,
         ),
@@ -246,7 +329,50 @@ class _MyHomePageState extends State<MyHomePage> {
         itemBuilder: (context, index) => ArtistCard(index),
       ));
     } else {
-      return const Column(children: []);
+      return Expanded(
+          // height: MediaQuery.of(context).size.height * 0.55,
+          child:GridView.builder(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: (1 / 1.2), // Adjust the aspect ratio here
+        ),
+        itemCount: albums.length,
+        itemBuilder: (BuildContext context, int index) {
+          String key = albums.keys.elementAt(index);
+          AlbumInfo info = albums[key]!;
+          return Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded( // Expanded widget makes the image take all available space
+                  child: CachedNetworkImage(
+                      imageUrl:
+                    info.artworkUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                     placeholder: (context, url) =>
+                          const CircularProgressIndicator(),
+                      errorWidget: (context, url, error) =>
+                          const Icon(Icons.error),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(key,
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis, // Prevent text overflow
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('Songs: ${info.songCount}'),
+                ),
+              ],
+            ),
+          );
+        },
+      ),);
     }
   }
 
@@ -271,7 +397,9 @@ class _MyHomePageState extends State<MyHomePage> {
             title: const Text("Spotify Playlist Generator"),
             centerTitle: true,
           ),
-          body: Column(
+          body: isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : Column(
             children: [
               const SizedBox(
                 height: 10,
@@ -487,4 +615,13 @@ exitButton(context) {
                             fontWeight: FontWeight.bold,
                             color: Colors.red))),
               ]));
+}
+
+
+class AlbumInfo {
+  String name;
+  String artworkUrl;
+  int songCount;
+
+  AlbumInfo(this.name, this.artworkUrl, this.songCount);
 }
